@@ -75,10 +75,16 @@ async function calcClubScore(supabase: any, clubId: string, gameweek: number): P
     player_id: c.player_id,
     position: c.player.position,
     stats: statsMap.get(c.player_id) ?? {
-      player_id: c.player_id, gameweek,
+      id: '',
+      player_id: c.player_id,
+      gameweek,
       minutes: starterIds.has(c.player_id) ? 90 : 0,
-      rating: 5.0, goals: 0, assists: 0,
-      clean_sheet: false, yellow_card: false, red_card: false,
+      rating: 5.0,
+      goals: 0,
+      assists: 0,
+      clean_sheet: false,
+      yellow_card: false,
+      red_card: false,
     },
     market_value: c.player.market_value,
     rank_in_club: i + 1,
@@ -140,7 +146,6 @@ export async function runSimulation(gameweek: number) {
 
     // Incrémenter réputation
     if (homeScore > awayScore) {
-      await supabase.from('clubs').update({ reputation: supabase.rpc })
       const { data: c } = await supabase.from('clubs').select('reputation').eq('id', match.home_club_id).single()
       if (c) await supabase.from('clubs').update({ reputation: Math.min(100, c.reputation + 3) }).eq('id', match.home_club_id)
     } else if (awayScore > homeScore) {
