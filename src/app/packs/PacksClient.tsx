@@ -146,9 +146,6 @@ export default function PacksClient({ clubId, packs, myPlayers }: Props) {
       for (const card of rewards) {
         if (card.type !== 'event') continue
         if (card.eventType === 'sponsor_bonus') {
-          await supabase.from('clubs')
-            .update({ budget: supabase.rpc as any })
-            .eq('id', clubId)
           // Simple update
           const { data: c } = await supabase.from('clubs').select('budget').eq('id', clubId).single()
           if (c) await supabase.from('clubs').update({ budget: c.budget + card.value }).eq('id', clubId)
