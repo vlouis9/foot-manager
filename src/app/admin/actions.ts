@@ -71,7 +71,7 @@ async function calcClubScore(supabase: any, clubId: string, gameweek: number): P
     starterIds = new Set(sorted.slice(0, 11).map((c: any) => c.player_id))
   }
 
-  const inputs: BotPlayerInput[] = sorted.map((c: any, i: number) => ({
+  const inputs = sorted.map((c: any, i: number) => ({
     player_id: c.player_id,
     position: c.player.position,
     stats: statsMap.get(c.player_id) ?? {
