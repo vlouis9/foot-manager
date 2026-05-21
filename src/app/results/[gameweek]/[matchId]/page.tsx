@@ -28,6 +28,12 @@ export default async function MatchDetailPage({
 
   if (!match) redirect(`/results/${gw}`)
 
+
+  // Supabase retourne parfois un tableau pour les joins — normaliser
+  const homeClub = Array.isArray(match.home_club) ? match.home_club[0] : match.home_club
+  const awayClub = Array.isArray(match.away_club) ? match.away_club[0] : match.away_club
+  const normalizedMatch = { ...match, home_club: homeClub, away_club: awayClub }
+
   // Joueurs des deux clubs avec stats
   async function getClubPlayersWithStats(clubId: string) {
     const { data: cp } = await supabase
@@ -65,12 +71,12 @@ export default async function MatchDetailPage({
     }))
   }
 
-  const homePlayers = await getClubPlayersWithStats(match.home_club.id)
-  const awayPlayers = await getClubPlayersWithStats(match.away_club.id)
+  const homePlayers = await getClubPlayersWithStats(homeClub.id)
+  const awayPlayers = await getClubPlayersWithStats(awayClub.id)
 
   return (
     <MatchDetailClient
-      match={match}
+      match={normalizedMatch}
       homePlayers={homePlayers}
       awayPlayers={awayPlayers}
       myClubId={myClub?.id ?? null}
