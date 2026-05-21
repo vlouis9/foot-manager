@@ -6,7 +6,8 @@ import {
   scoreToGoals,
   getMatchResult,
 } from '@/lib/score-engine'
-import type { PlayerScoreInput, BotPlayerInput, Formation } from '@/types'
+import type { PlayerScoreInput, Formation } from '@/types'
+import type { BotPlayerInput } from '@/lib/score-engine'
 import { revalidatePath } from 'next/cache'
 
 // ── Simuler une journée complète ──────────────────────────────
