@@ -14,32 +14,36 @@ export default function GameweekClient({ gameweek, matches, myClubId }: Props) {
     <div className="page max-w-lg mx-auto">
       <div className="flex items-center gap-3 pt-2 mb-6">
         <Link href="/results" className="text-gray-400 font-body text-sm flex items-center gap-1">
-          <ChevronLeft size={16} />Retour
+          <ChevronLeft size={16} />Résultats
         </Link>
         <h1 className="section-title flex-1">Journée {gameweek}</h1>
       </div>
 
       <div className="space-y-2">
         {matches.map(m => {
-          const isMyMatch = m.home_club.id === myClubId || m.away_club.id === myClubId
+          const hc = Array.isArray(m.home_club) ? m.home_club[0] : m.home_club
+          const ac = Array.isArray(m.away_club) ? m.away_club[0] : m.away_club
+          const isMyMatch = hc?.id === myClubId || ac?.id === myClubId
           const hGoals = m.home_score != null ? Math.round(m.home_score / 10) : '–'
           const aGoals = m.away_score != null ? Math.round(m.away_score / 10) : '–'
 
           let resultColor = ''
-          if (m.processed && myClubId && isMyMatch) {
-            const mine = m.home_club.id === myClubId ? m.home_score : m.away_score
-            const opp  = m.home_club.id === myClubId ? m.away_score : m.home_score
-            if (mine > opp) resultColor = 'border-l-2 border-l-grass'
+          if (m.processed && isMyMatch) {
+            const mine  = hc?.id === myClubId ? m.home_score : m.away_score
+            const opp   = hc?.id === myClubId ? m.away_score : m.home_score
+            if (mine > opp)      resultColor = 'border-l-2 border-l-grass'
             else if (mine < opp) resultColor = 'border-l-2 border-l-red-600'
-            else resultColor = 'border-l-2 border-l-trophy'
+            else                 resultColor = 'border-l-2 border-l-trophy'
           }
 
           return (
             <Link key={m.id} href={`/results/${gameweek}/${m.id}`}>
               <div className={cn('player-card flex items-center gap-2 mb-2', resultColor)}>
-                <span className={cn('font-display font-bold text-sm flex-1 truncate',
-                  isMyMatch && m.home_club.id === myClubId ? 'text-grass' : 'text-white')}>
-                  {m.home_club.name}
+                <span className={cn(
+                  'font-display font-bold text-sm flex-1 truncate',
+                  isMyMatch && hc?.id === myClubId ? 'text-grass' : 'text-white'
+                )}>
+                  {hc?.name}
                 </span>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {m.processed ? (
@@ -52,9 +56,11 @@ export default function GameweekClient({ gameweek, matches, myClubId }: Props) {
                     <span className="text-gray-600 text-sm font-body px-2">vs</span>
                   )}
                 </div>
-                <span className={cn('font-display font-bold text-sm flex-1 truncate text-right',
-                  isMyMatch && m.away_club.id === myClubId ? 'text-grass' : 'text-white')}>
-                  {m.away_club.name}
+                <span className={cn(
+                  'font-display font-bold text-sm flex-1 truncate text-right',
+                  isMyMatch && ac?.id === myClubId ? 'text-grass' : 'text-white'
+                )}>
+                  {ac?.name}
                 </span>
                 <ChevronRight size={14} className="text-gray-600" />
               </div>

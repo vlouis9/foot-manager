@@ -26,7 +26,7 @@ export default async function ResultsPage() {
 
   return (
     <ResultsClient
-      matches={matches ?? []}
+      matches={(matches ?? []) as any}
       myClubId={myClub?.id ?? null}
       currentGameweek={state?.current_gameweek ?? 1}
     />

@@ -27,7 +27,7 @@ export default async function GameweekPage({
   return (
     <GameweekClient
       gameweek={gw}
-      matches={matches ?? []}
+      matches={(matches ?? []) as any}
       myClubId={myClub?.id ?? null}
     />
   )
