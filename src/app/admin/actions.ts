@@ -91,7 +91,7 @@ async function calcClubScore(supabase: any, clubId: string, gameweek: number): P
   }))
 
   const seed = clubId.charCodeAt(0) * 31 + clubId.charCodeAt(clubId.length - 1) + gameweek * 17
-  return computeBotScore(inputs, seed)
+  return computeBotScore(inputs as BotPlayerInput[], seed)
 }
 
 // Traite tous les matchs d'une journée
