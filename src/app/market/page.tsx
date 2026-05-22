@@ -11,26 +11,43 @@ export default async function MarketPage() {
     .from('clubs').select('*').eq('user_id', user.id).single()
   if (!club) redirect('/onboarding')
 
-  // Joueurs sur le marché (non expirés)
-  const { data: market } = await supabase
-    .from('market')
-    .select('*, player:players(*)')
-    .gt('expires_at', new Date().toISOString())
-    .order('availability', { ascending: true })
-    .order('price', { ascending: true })
-    .limit(30)
+  // Tous les joueurs de la ligue avec leurs stats agrégées
+  const { data: allPlayers } = await supabase
+    .from('players')
+    .select('*')
+    .order('market_value', { ascending: false })
 
-  // Mon effectif actuel (pour vente)
+  // Stats agrégées par joueur (moyennes)
+  const { data: allStats } = await supabase
+    .from('player_real_stats')
+    .select('player_id, rating, goals, assists, minutes, gameweek')
+    .order('gameweek', { ascending: false })
+
+  // Mon effectif
   const { data: myPlayers } = await supabase
     .from('club_players')
     .select('*, player:players(*)')
     .eq('club_id', club.id)
 
+  // Offres marché actives
+  const { data: market } = await supabase
+    .from('market')
+    .select('player_id, price, availability, expires_at')
+    .gt('expires_at', new Date().toISOString())
+
+  // Tous les club_players pour savoir qui est disponible
+  const { data: allClubPlayers } = await supabase
+    .from('club_players')
+    .select('player_id, club_id, clubs!inner(is_bot)')
+
   return (
     <MarketClient
       club={club}
-      marketItems={market ?? []}
+      allPlayers={allPlayers ?? []}
+      allStats={allStats ?? []}
       myPlayers={myPlayers ?? []}
+      marketOffers={market ?? []}
+      allClubPlayers={allClubPlayers ?? []}
     />
   )
 }
