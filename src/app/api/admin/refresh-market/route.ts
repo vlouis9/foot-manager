@@ -27,7 +27,7 @@ export async function POST() {
     .eq('clubs.is_bot', false)
 
   const playerClubIds = playerClubs?.map(p => p.player_id) ?? []
-  const allExcluded = [...new Set([...excludedIds, ...playerClubIds])]
+  const allExcluded = Array.from(new Set([...excludedIds, ...playerClubIds]))
 
   let query = supabase.from('players').select('id, market_value')
   if (allExcluded.length > 0) {
