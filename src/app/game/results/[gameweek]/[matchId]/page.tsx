@@ -1,21 +1,19 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import MatchDetailClient from './MatchDetailClient'
+import GameMatchDetail from './GameMatchDetail'
 
-export default async function MatchDetailPage({
+export default async function GameMatchDetailPage({
   params,
-}: {
-  params: { gameweek: string; matchId: string }
-}) {
+}: { params: { gameweek: string; matchId: string } }) {
   const supabase = createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth')
 
   const gw = parseInt(params.gameweek)
-  const { data: myClub } = await supabase
-    .from('clubs').select('id').eq('user_id', user.id).single()
 
-  // Le match
+  const { data: myClub } = await supabase
+    .from('clubs').select('id').eq('user_id', user.id).eq('is_bot', false).single()
+
   const { data: match } = await supabase
     .from('matches')
     .select(`
@@ -26,57 +24,48 @@ export default async function MatchDetailPage({
     .eq('id', params.matchId)
     .single()
 
-  if (!match) redirect(`/results/${gw}`)
+  if (!match) redirect(`/game/results?gw=${gw}`)
 
+  const hc = Array.isArray(match.home_club) ? match.home_club[0] : match.home_club
+  const ac = Array.isArray(match.away_club) ? match.away_club[0] : match.away_club
 
-  // Supabase retourne parfois un tableau pour les joins — normaliser
-  const homeClub = Array.isArray(match.home_club) ? match.home_club[0] : match.home_club
-  const awayClub = Array.isArray(match.away_club) ? match.away_club[0] : match.away_club
-  const normalizedMatch = { ...match, home_club: homeClub, away_club: awayClub }
-
-  // Joueurs des deux clubs avec stats
-  async function getClubPlayersWithStats(clubId: string) {
+  async function getClubPlayers(clubId: string) {
     const { data: cp } = await supabase
       .from('club_players')
       .select('*, player:players(*)')
       .eq('club_id', clubId)
 
     if (!cp?.length) return []
-
-    const playerIds = cp.map((p: any) => p.player_id)
+    const ids = cp.map((p: any) => p.player_id)
     const { data: stats } = await supabase
-      .from('player_real_stats')
-      .select('*')
-      .eq('gameweek', gw)
-      .in('player_id', playerIds)
-
+      .from('player_real_stats').select('*').eq('gameweek', gw).in('player_id', ids)
     const statsMap = new Map(stats?.map(s => [s.player_id, s]) ?? [])
 
-    // Récupérer la composition si club joueur
     const { data: lineup } = await supabase
       .from('lineups')
-      .select('*, lineup_players(*)')
-      .eq('club_id', clubId)
-      .eq('gameweek', gw)
-      .single()
-
+      .select('lineup_players(*)')
+      .eq('club_id', clubId).eq('gameweek', gw).maybeSingle()
     const starterIds = new Set(
       lineup?.lineup_players?.filter((lp: any) => lp.starter).map((lp: any) => lp.player_id) ?? []
     )
+    const sorted = [...cp].sort((a: any, b: any) => b.player.market_value - a.player.market_value)
+    const autoStarters = new Set(sorted.slice(0, 11).map((c: any) => c.player_id))
 
     return cp.map((c: any) => ({
       ...c,
       stats: statsMap.get(c.player_id) ?? null,
-      starter: starterIds.size > 0 ? starterIds.has(c.player_id) : c.player.market_value > 5_000_000,
+      starter: starterIds.size > 0 ? starterIds.has(c.player_id) : autoStarters.has(c.player_id),
     }))
   }
 
-  const homePlayers = await getClubPlayersWithStats(homeClub.id)
-  const awayPlayers = await getClubPlayersWithStats(awayClub.id)
+  const [homePlayers, awayPlayers] = await Promise.all([
+    getClubPlayers(hc.id),
+    getClubPlayers(ac.id),
+  ])
 
   return (
-    <MatchDetailClient
-      match={normalizedMatch}
+    <GameMatchDetail
+      match={{ ...match, home_club: hc, away_club: ac }}
       homePlayers={homePlayers}
       awayPlayers={awayPlayers}
       myClubId={myClub?.id ?? null}
