@@ -7,19 +7,30 @@ export default async function WelcomePage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth')
 
-  const { data: clubs } = await supabase
-    .from('clubs').select('id, name, budget, reputation, created_at')
-    .eq('user_id', user.id).eq('is_bot', false)
-    .order('created_at', { ascending: false })
+  // Toutes les saves du joueur avec les infos du club
+  const { data: saves } = await supabase
+    .from('game_saves')
+    .select('id, save_name, is_active, gameweek, last_played, club_id, clubs(name, budget, reputation)')
+    .eq('user_id', user.id)
+    .order('last_played', { ascending: false })
 
-  const { data: states } = await supabase
-    .from('onboarding_state').select('*').eq('user_id', user.id)
+  const formattedSaves = (saves ?? []).map((s: any) => ({
+    id: s.id,
+    club_name: s.clubs?.name ?? s.save_name,
+    budget:     s.clubs?.budget ?? 0,
+    reputation: s.clubs?.reputation ?? 0,
+    gameweek:   s.gameweek,
+    last_played: s.last_played,
+    is_active:  s.is_active,
+  }))
+
+  const activeSave = formattedSaves.find(s => s.is_active) ?? null
 
   return (
     <WelcomeClient
       user={{ id: user.id, email: user.email ?? '' }}
-      clubs={clubs ?? []}
-      onboardingStates={states ?? []}
+      saves={formattedSaves}
+      activeSave={activeSave}
     />
   )
 }

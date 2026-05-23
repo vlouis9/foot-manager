@@ -11,21 +11,19 @@ export async function POST(req: Request) {
   const config = CLUB_CONFIGS[clubName]
   if (!config) return NextResponse.json({ error: 'Club invalide' }, { status: 400 })
 
-  // Vérifier que la date n'est pas dans le futur
   const start = new Date(startDate)
   if (start > new Date()) {
-    return NextResponse.json({ error: 'Date de démarrage dans le futur' }, { status: 400 })
+    return NextResponse.json({ error: 'Date dans le futur' }, { status: 400 })
   }
 
-  // Supprimer l'ancienne partie si elle existe
-  const { data: oldClub } = await supabase
-    .from('clubs').select('id').eq('user_id', user.id).eq('is_bot', false).single()
-  if (oldClub) {
-    await supabase.from('clubs').delete().eq('id', oldClub.id)
-  }
+  // ── NE PAS supprimer les anciennes parties ─────────────────
+  // Désactiver les parties précédentes
+  await supabase.from('game_saves')
+    .update({ is_active: false })
+    .eq('user_id', user.id)
 
-  // Créer le nouveau club
-  const { data: club, error } = await supabase
+  // ── Créer le nouveau club ──────────────────────────────────
+  const { data: club, error: clubErr } = await supabase
     .from('clubs')
     .insert({
       user_id: user.id,
@@ -35,27 +33,22 @@ export async function POST(req: Request) {
       is_bot: false,
     })
     .select().single()
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (clubErr) return NextResponse.json({ error: clubErr.message }, { status: 500 })
 
-  // Upgrades initiaux
+  // ── Upgrades initiaux ──────────────────────────────────────
   await supabase.from('club_upgrades').insert([
-    { club_id: club.id, type: 'offense_center',  level: 0 },
-    { club_id: club.id, type: 'defense_center',  level: 0 },
-    { club_id: club.id, type: 'tactical_room',   level: 0 },
-    { club_id: club.id, type: 'academy',         level: 0 },
-    { club_id: club.id, type: 'training_center', level: 0 },
-    { club_id: club.id, type: 'stadium',         level: 0 },
-    { club_id: club.id, type: 'tactical_staff',  level: 0 },
-  ])
+    'offense_center','defense_center','tactical_room','academy',
+    'training_center','stadium','tactical_staff',
+  ].map(type => ({ club_id: club.id, type, level: 0 })))
 
-  // Paquets de bienvenue
+  // ── Paquets de bienvenue ───────────────────────────────────
   await supabase.from('card_packs').insert([
     { club_id: club.id, type: 'standard', opened: false },
     { club_id: club.id, type: 'standard', opened: false },
     { club_id: club.id, type: 'standard', opened: false },
   ])
 
-  // Trouver la gameweek de démarrage selon la date
+  // ── Gameweek de départ selon la date ──────────────────────
   const { data: firstMatch } = await supabase
     .from('calendar')
     .select('gameweek')
@@ -63,10 +56,21 @@ export async function POST(req: Request) {
     .order('match_date', { ascending: true })
     .limit(1)
     .single()
-
   const startGameweek = firstMatch?.gameweek ?? 1
 
-  // Mettre à jour l'onboarding state
+  // ── Créer la save ──────────────────────────────────────────
+  const { data: save } = await supabase
+    .from('game_saves')
+    .insert({
+      user_id: user.id,
+      club_id: club.id,
+      save_name: `${clubName} — Saison 2025`,
+      is_active: true,
+      gameweek: startGameweek,
+    })
+    .select().single()
+
+  // ── Onboarding state ───────────────────────────────────────
   await supabase.from('onboarding_state').upsert({
     user_id: user.id,
     club_chosen: false,
@@ -74,7 +78,8 @@ export async function POST(req: Request) {
     current_gameweek: startGameweek,
     simulated_date: start.toISOString(),
     game_started_at: new Date().toISOString(),
+    save_id: save?.id ?? null,
   }, { onConflict: 'user_id' })
 
-  return NextResponse.json({ clubId: club.id, startGameweek })
+  return NextResponse.json({ clubId: club.id, clubName, startGameweek })
 }
