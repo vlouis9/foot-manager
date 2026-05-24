@@ -88,7 +88,7 @@ export interface Match {
 }
 
 // ─── Upgrades RPG ─────────────────────────────────────────────────────────
-export type UpgradeType = 'offense_center' | 'defense_center' | 'tactical_room' | 'academy'
+export type UpgradeType = 'offense_center' | 'defense_center' | 'tactical_room' | 'academy' | 'training_center' | 'stadium' | 'tactical_staff'
 
 export interface ClubUpgrade {
   id: string
