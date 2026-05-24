@@ -30,8 +30,7 @@ export async function POST(req: Request) {
   // ─── Import joueurs ──────────────────────────────────────────
   if (players?.length) {
     // Truncate cascade (réinitialise tout)
-    await supabase.rpc('truncate_players_cascade')
-      .catch(() => null) // fallback si pas de fonction
+    try { await supabase.rpc('truncate_players_cascade' as any) } catch { /* fallback */ }
 
     const playerInserts = players.map((p: any) => ({
       joueurid:     p.joueurid,
