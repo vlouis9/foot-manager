@@ -7,17 +7,7 @@ export default async function GameLayout({ children }: { children: React.ReactNo
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth')
 
-  const { data: state } = await supabase
-    .from('onboarding_state')
-    .select('*')
-    .eq('user_id', user.id)
-    .single()
-
-  // Rediriger seulement si vraiment pas de partie
-  if (!state) redirect('/welcome')
-  if (!state.draft_done) redirect('/onboarding')
-
-  // Club actif - le plus récent avec is_bot=false
+  // Chercher un club joueur actif — si pas de partie du tout → welcome
   const { data: clubs } = await supabase
     .from('clubs')
     .select('id, name, budget')
@@ -29,14 +19,26 @@ export default async function GameLayout({ children }: { children: React.ReactNo
   const club = clubs?.[0]
   if (!club) redirect('/welcome')
 
+  // Vérifier l'onboarding — si draft pas fait → onboarding
+  const { data: state } = await supabase
+    .from('onboarding_state')
+    .select('*')
+    .eq('user_id', user.id)
+    .single()
+
+  // Si draft pas terminé mais club existe → aller finir le draft
+  if (!state?.draft_done) redirect('/onboarding')
+
+  // Paquets non ouverts
   const { count: packCount } = await supabase
     .from('card_packs')
     .select('*', { count: 'exact', head: true })
     .eq('club_id', club.id)
     .eq('opened', false)
 
-  const simDate = state.simulated_date ?? new Date().toISOString()
+  const simDate = state?.simulated_date ?? new Date().toISOString()
 
+  // Prochain match selon la date simulée
   const { data: nextCalendar } = await supabase
     .from('calendar')
     .select('*')
@@ -49,7 +51,7 @@ export default async function GameLayout({ children }: { children: React.ReactNo
     <GameLayoutClient
       club={club}
       simulatedDate={simDate}
-      currentGameweek={state.current_gameweek ?? 1}
+      currentGameweek={state?.current_gameweek ?? 1}
       pendingPacks={packCount ?? 0}
       nextCalendarMatch={nextCalendar ?? null}
     >
