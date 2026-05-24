@@ -1,35 +1,32 @@
 'use client'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import Link from 'next/link'
 import { runSimulation } from './actions'
-import { ChevronLeft, ChevronRight, Upload, Sliders, Play, Database } from 'lucide-react'
+import { ChevronLeft, Play, Sliders, Upload, Database, FileSpreadsheet } from 'lucide-react'
 
 const SECTIONS = [
-  { id: 'simulation', label: 'Simulation',   icon: Play },
-  { id: 'config',     label: 'Config jeu',   icon: Sliders },
-  { id: 'calendar',   label: 'Calendrier',   icon: Upload },
-  { id: 'data',       label: 'Données',      icon: Database },
+  { id: 'simulation', label: 'Simulation',  icon: Play },
+  { id: 'config',     label: 'Config',      icon: Sliders },
+  { id: 'calendar',   label: 'Calendrier',  icon: Upload },
+  { id: 'data',       label: 'Données',     icon: Database },
 ]
 
+function cn(...classes: any[]) { return classes.filter(Boolean).join(' ') }
+
+// ── Simulation ────────────────────────────────────────────────
 function SimulationPanel() {
   const [gameweek, setGameweek] = useState(1)
   const [log, setLog] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
 
   async function handleRun() {
-    setLoading(true)
-    setLog([])
+    setLoading(true); setLog([])
     try {
       setLog(l => [...l, `⚙️ Génération stats J${gameweek}...`])
       const result = await runSimulation(gameweek)
-      setLog(l => [
-        ...l,
-        `✅ ${result.count} stats générées`,
-        `✅ ${result.processed} matchs traités`,
-        `🎉 Journée ${gameweek} terminée !`,
-      ])
+      setLog(l => [...l, `✅ ${result.count} stats générées`, `✅ ${result.processed} matchs traités`, `🎉 Journée ${gameweek} terminée !`])
     } catch (e: any) {
-      setLog(l => [...l, `❌ Erreur : ${e?.message ?? 'inconnue'}`])
+      setLog(l => [...l, `❌ ${e?.message ?? 'Erreur inconnue'}`])
     }
     setLoading(false)
   }
@@ -37,18 +34,15 @@ function SimulationPanel() {
   return (
     <div className="space-y-4">
       <div className="player-card">
-        <p className="text-gray-400 text-sm font-body mb-4">
-          Simule une journée complète avec des stats aléatoires réalistes.
-        </p>
+        <p className="text-gray-400 text-sm font-body mb-4">Simule une journée avec des stats aléatoires réalistes.</p>
         <div className="flex items-center gap-3 mb-4">
           <label className="text-gray-400 font-body text-sm">Journée :</label>
           <input type="number" min={1} max={34} value={gameweek}
             onChange={e => setGameweek(Number(e.target.value))}
-            className="w-20 bg-card border border-card-border rounded-xl px-3 py-2 text-white font-body text-sm focus:outline-none focus:border-grass/60"
-          />
+            className="w-20 bg-card border border-card-border rounded-xl px-3 py-2 text-white font-body text-sm focus:outline-none focus:border-grass/60" />
         </div>
         <button onClick={handleRun} disabled={loading} className="btn-primary w-full">
-          {loading ? 'Simulation en cours...' : `▶ Simuler J${gameweek}`}
+          {loading ? 'Simulation...' : `▶ Simuler J${gameweek}`}
         </button>
       </div>
       {log.length > 0 && (
@@ -61,62 +55,51 @@ function SimulationPanel() {
   )
 }
 
+// ── Config ────────────────────────────────────────────────────
 function ConfigPanel() {
   const [configs, setConfigs] = useState<Record<string, string>>({})
-  const [loaded, setLoaded] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [toast, setToast] = useState('')
+  const [loaded, setLoaded]   = useState(false)
+  const [saving, setSaving]   = useState(false)
+  const [toast, setToast]     = useState('')
 
   async function load() {
     const res = await fetch('/api/admin/config')
     const data = await res.json()
     const map: Record<string, string> = {}
     for (const row of data) map[row.key] = String(row.value)
-    setConfigs(map)
-    setLoaded(true)
+    setConfigs(map); setLoaded(true)
   }
 
   async function save() {
     setSaving(true)
-    await fetch('/api/admin/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(configs),
-    })
-    setToast('✅ Config sauvegardée')
-    setTimeout(() => setToast(''), 2000)
-    setSaving(false)
+    await fetch('/api/admin/config', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(configs) })
+    setToast('✅ Sauvegardé'); setTimeout(() => setToast(''), 2000); setSaving(false)
   }
 
   const CATEGORIES: Record<string, string[]> = {
-    'Budgets initiaux': ['budget_psg','budget_top','budget_solide','budget_milieu','budget_outsider','budget_defi'],
-    'Coefficients de score': ['coeff_goal','coeff_assist','coeff_clean_sheet','coeff_yellow','coeff_red','coeff_starter','coeff_sub_played','coeff_sub_bench'],
+    'Budgets': ['budget_psg','budget_top','budget_solide','budget_milieu','budget_outsider','budget_defi'],
+    'Scoring': ['coeff_goal','coeff_assist','coeff_clean_sheet','coeff_yellow','coeff_red','coeff_starter','coeff_sub_played','coeff_sub_bench'],
     'Aléatoire': ['random_factor_min','random_factor_max'],
     'RPG': ['rpg_level_bonus','rpg_collective_max'],
     'Marché': ['market_sell_ratio','market_duration_h'],
-    'Onboarding': ['draft_cards_count'],
+    'Draft': ['draft_cards_count'],
   }
-
   const LABELS: Record<string, string> = {
-    budget_psg: 'PSG', budget_top: 'Top', budget_solide: 'Solide',
-    budget_milieu: 'Milieu', budget_outsider: 'Outsider', budget_defi: 'Défi',
-    coeff_goal: 'But', coeff_assist: 'Passe déc.', coeff_clean_sheet: 'Clean sheet',
-    coeff_yellow: 'Carton jaune', coeff_red: 'Carton rouge',
-    coeff_starter: 'Titulaire', coeff_sub_played: 'Rempl. entrant', coeff_sub_bench: 'Rempl. banc',
-    random_factor_min: 'Min', random_factor_max: 'Max',
-    rpg_level_bonus: 'Bonus/niveau', rpg_collective_max: 'Bonus collectif max',
-    market_sell_ratio: 'Ratio vente', market_duration_h: 'Durée offre (h)',
-    draft_cards_count: 'Cartes au draft',
+    budget_psg:'PSG', budget_top:'Top', budget_solide:'Solide', budget_milieu:'Milieu', budget_outsider:'Outsider', budget_defi:'Défi',
+    coeff_goal:'But', coeff_assist:'Passe déc.', coeff_clean_sheet:'Clean sheet', coeff_yellow:'Jaune', coeff_red:'Rouge',
+    coeff_starter:'Titulaire', coeff_sub_played:'Rempl. entrant', coeff_sub_bench:'Rempl. banc',
+    random_factor_min:'Min', random_factor_max:'Max',
+    rpg_level_bonus:'Bonus/niveau', rpg_collective_max:'Collectif max',
+    market_sell_ratio:'Ratio vente', market_duration_h:'Durée offre (h)',
+    draft_cards_count:'Cartes au draft',
   }
 
-  if (!loaded) {
-    return (
-      <div className="player-card text-center py-6">
-        <p className="text-gray-500 font-body mb-4">Charger la configuration actuelle</p>
-        <button onClick={load} className="btn-primary">Charger</button>
-      </div>
-    )
-  }
+  if (!loaded) return (
+    <div className="player-card text-center py-6">
+      <p className="text-gray-500 font-body mb-4">Charger la configuration</p>
+      <button onClick={load} className="btn-primary">Charger</button>
+    </div>
+  )
 
   return (
     <div className="space-y-4">
@@ -128,61 +111,42 @@ function ConfigPanel() {
             {keys.map(key => (
               <div key={key} className="flex items-center justify-between gap-3">
                 <label className="text-gray-300 text-sm font-body flex-1">{LABELS[key] ?? key}</label>
-                <input
-                  type="number" step="any"
-                  value={configs[key] ?? ''}
+                <input type="number" step="any" value={configs[key] ?? ''}
                   onChange={e => setConfigs(c => ({ ...c, [key]: e.target.value }))}
-                  className="w-28 bg-pitch border border-card-border rounded-lg px-2 py-1.5 text-white font-body text-sm text-right focus:outline-none focus:border-grass/60"
-                />
+                  className="w-28 bg-pitch border border-card-border rounded-lg px-2 py-1.5 text-white font-body text-sm text-right focus:outline-none focus:border-grass/60" />
               </div>
             ))}
           </div>
         </div>
       ))}
-      <button onClick={save} disabled={saving} className="btn-primary w-full">
-        {saving ? '...' : '💾 Sauvegarder'}
-      </button>
+      <button onClick={save} disabled={saving} className="btn-primary w-full">{saving ? '...' : '💾 Sauvegarder'}</button>
     </div>
   )
 }
 
+// ── Calendrier ────────────────────────────────────────────────
 function CalendarPanel() {
-  const [csv, setCsv] = useState('')
+  const [csv, setCsv]     = useState('')
   const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState('')
+  const [result, setResult]   = useState('')
 
   async function importCalendar() {
-    setLoading(true)
-    setResult('')
-    const res = await fetch('/api/admin/calendar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ csv }),
-    })
+    setLoading(true); setResult('')
+    const res = await fetch('/api/admin/calendar', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ csv }) })
     const data = await res.json()
-    setResult(data.message ?? data.error)
-    setLoading(false)
+    setResult(data.message ?? data.error); setLoading(false)
   }
 
   return (
     <div className="space-y-4">
       <div className="player-card">
-        <p className="text-gray-400 text-sm font-body mb-2">Format CSV attendu :</p>
-        <pre className="text-xs text-grass font-body bg-pitch rounded-lg p-3 overflow-x-auto">
-{`gameweek,date,home_team,away_team
-1,2024-08-17 21:00,PSG,Monaco
-1,2024-08-17 17:00,Lyon,Marseille`}
-        </pre>
+        <p className="text-gray-400 text-sm font-body mb-2">Format CSV :</p>
+        <pre className="text-xs text-grass font-body bg-pitch rounded-lg p-3 overflow-x-auto">{`gameweek,date,home_team,away_team\n1,2024-08-17 21:00,PSG,Monaco`}</pre>
       </div>
       <div className="player-card">
-        <p className="text-gray-400 text-sm font-body mb-2">Colle ton CSV ici :</p>
-        <textarea
-          value={csv}
-          onChange={e => setCsv(e.target.value)}
-          rows={8}
-          placeholder="gameweek,date,home_team,away_team&#10;1,2024-08-17 21:00,PSG,Monaco"
-          className="w-full bg-pitch border border-card-border rounded-xl px-3 py-2 text-white font-body text-xs focus:outline-none focus:border-grass/60 resize-none"
-        />
+        <textarea value={csv} onChange={e => setCsv(e.target.value)} rows={6}
+          placeholder="Colle ton CSV ici..."
+          className="w-full bg-pitch border border-card-border rounded-xl px-3 py-2 text-white font-body text-xs focus:outline-none focus:border-grass/60 resize-none" />
         <button onClick={importCalendar} disabled={loading || !csv.trim()} className="btn-primary w-full mt-3">
           {loading ? 'Import...' : '📅 Importer le calendrier'}
         </button>
@@ -192,41 +156,102 @@ function CalendarPanel() {
   )
 }
 
+// ── Données + Import Stats ────────────────────────────────────
 function DataPanel() {
-  const [loading, setLoading] = useState<string | null>(null)
-  const [result, setResult] = useState('')
+  const [loading, setLoading]     = useState<string | null>(null)
+  const [result, setResult]       = useState('')
+  const [statsFile, setStatsFile] = useState<File | null>(null)
+  const [importing, setImporting] = useState(false)
+  const [importResult, setImportResult] = useState('')
+  const fileRef = useRef<HTMLInputElement>(null)
 
   async function action(endpoint: string, label: string) {
-    setLoading(label)
-    setResult('')
+    setLoading(label); setResult('')
     const res = await fetch(endpoint, { method: 'POST' })
     const data = await res.json()
-    setResult(data.message ?? data.error ?? 'OK')
-    setLoading(null)
+    setResult(data.message ?? data.error ?? 'OK'); setLoading(null)
+  }
+
+  async function importStats() {
+    if (!statsFile) return
+    setImporting(true); setImportResult('')
+    try {
+      // Lire le fichier Excel/CSV
+      const XLSX = await import('xlsx')
+      const buffer = await statsFile.arrayBuffer()
+      const wb = XLSX.read(buffer)
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const rows: any[] = XLSX.utils.sheet_to_json(ws)
+
+      // Normaliser les colonnes
+      const normalized = rows.map(row => ({
+        lastname:  row['Nom'] ?? row['lastname'] ?? '',
+        club:      row['Club'] ?? row['club'] ?? '',
+        position:  row['Poste'] ?? row['position'] ?? '',
+        gameweek:  parseInt(row['Journée'] ?? row['gameweek'] ?? 0),
+        played:    parseInt(row['Joué'] ?? row['played'] ?? 0),
+        starter:   parseInt(row['Titulaire'] ?? row['starter'] ?? 0),
+        rating:    parseFloat(row['Note'] ?? row['rating'] ?? 0),
+        goals:     parseInt(row['Buts'] ?? row['goals'] ?? 0),
+      })).filter(r => r.lastname && r.gameweek > 0)
+
+      const res = await fetch('/api/admin/import-stats', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows: normalized }),
+      })
+      const data = await res.json()
+      setImportResult(data.message ?? data.error)
+    } catch (e: any) {
+      setImportResult(`❌ Erreur : ${e.message}`)
+    }
+    setImporting(false)
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
+      {/* Import stats */}
+      <div className="player-card">
+        <div className="flex items-center gap-2 mb-3">
+          <FileSpreadsheet size={16} className="text-grass" />
+          <p className="font-display font-bold text-white text-sm">Import Stats Joueurs</p>
+        </div>
+        <p className="text-gray-400 text-xs font-body mb-3">
+          Importe le fichier Excel généré (Nom, Club, Poste, Journée, Joué, Titulaire, Note, Buts)
+        </p>
+        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv"
+          onChange={e => setStatsFile(e.target.files?.[0] ?? null)}
+          className="hidden" />
+        <button onClick={() => fileRef.current?.click()}
+          className="btn-secondary w-full mb-2">
+          {statsFile ? `📄 ${statsFile.name}` : '📂 Choisir le fichier Excel'}
+        </button>
+        {statsFile && (
+          <button onClick={importStats} disabled={importing} className="btn-primary w-full">
+            {importing ? 'Import en cours...' : '⬆ Importer les stats'}
+          </button>
+        )}
+        {importResult && (
+          <p className={cn('text-sm font-body mt-2', importResult.startsWith('❌') ? 'text-red-400' : 'text-grass')}>
+            {importResult}
+          </p>
+        )}
+      </div>
+
       {result && (
         <div className="player-card border-grass/30 bg-grass/5">
           <p className="text-grass text-sm font-body">{result}</p>
         </div>
       )}
+
       {[
         { label: 'Ajouter paquets quotidiens', endpoint: '/api/admin/daily-packs' },
-        { label: 'Rafraîchir le marché', endpoint: '/api/admin/refresh-market' },
+        { label: 'Rafraîchir le marché',        endpoint: '/api/admin/refresh-market' },
         { label: 'Réinitialiser le calendrier', endpoint: '/api/admin/reset-calendar', danger: true },
       ].map(({ label, endpoint, danger }) => (
-        <button
-          key={label}
-          onClick={() => action(endpoint, label)}
-          disabled={!!loading}
+        <button key={label} onClick={() => action(endpoint, label)} disabled={!!loading}
           className={cn('w-full py-3 rounded-xl font-display font-bold text-sm uppercase tracking-wide transition-all',
-            danger
-              ? 'bg-red-900/30 border border-red-800/40 text-red-400 active:scale-95'
-              : 'btn-secondary'
-          )}
-        >
+            danger ? 'bg-red-900/30 border border-red-800/40 text-red-400' : 'btn-secondary')}>
           {loading === label ? '...' : label}
         </button>
       ))}
@@ -234,18 +259,12 @@ function DataPanel() {
   )
 }
 
-function cn(...classes: any[]) {
-  return classes.filter(Boolean).join(' ')
-}
-
 export default function AdminPage() {
   const [section, setSection] = useState('simulation')
-
   const ActiveSection =
     section === 'simulation' ? SimulationPanel :
     section === 'config'     ? ConfigPanel :
-    section === 'calendar'   ? CalendarPanel :
-    DataPanel
+    section === 'calendar'   ? CalendarPanel : DataPanel
 
   return (
     <div className="page max-w-lg mx-auto">
@@ -255,23 +274,15 @@ export default function AdminPage() {
         </Link>
         <h1 className="section-title flex-1">Admin</h1>
       </div>
-
-      {/* Nav sections */}
       <div className="grid grid-cols-4 gap-1.5 mb-6">
         {SECTIONS.map(({ id, label, icon: Icon }) => (
           <button key={id} onClick={() => setSection(id)}
-            className={cn(
-              'flex flex-col items-center gap-1 py-2.5 rounded-xl border transition-all text-xs font-display font-bold uppercase',
-              section === id
-                ? 'bg-grass text-pitch border-grass'
-                : 'bg-card border-card-border text-gray-400'
-            )}>
-            <Icon size={16} />
-            <span>{label}</span>
+            className={cn('flex flex-col items-center gap-1 py-2.5 rounded-xl border transition-all text-xs font-display font-bold uppercase',
+              section === id ? 'bg-grass text-pitch border-grass' : 'bg-card border-card-border text-gray-400')}>
+            <Icon size={16} /><span>{label}</span>
           </button>
         ))}
       </div>
-
       <ActiveSection />
     </div>
   )

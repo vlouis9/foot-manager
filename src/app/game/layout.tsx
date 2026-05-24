@@ -7,38 +7,36 @@ export default async function GameLayout({ children }: { children: React.ReactNo
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth')
 
-  // Récupérer la partie active (la plus récente avec draft_done = true)
   const { data: state } = await supabase
     .from('onboarding_state')
     .select('*')
     .eq('user_id', user.id)
     .single()
 
-  // Si pas de partie ou draft non terminé → welcome
+  // Rediriger seulement si vraiment pas de partie
   if (!state) redirect('/welcome')
   if (!state.draft_done) redirect('/onboarding')
 
-  // Club actif
-  const { data: club } = await supabase
+  // Club actif - le plus récent avec is_bot=false
+  const { data: clubs } = await supabase
     .from('clubs')
     .select('id, name, budget')
     .eq('user_id', user.id)
     .eq('is_bot', false)
     .order('created_at', { ascending: false })
     .limit(1)
-    .single()
 
+  const club = clubs?.[0]
   if (!club) redirect('/welcome')
 
-  // Packs non ouverts
   const { count: packCount } = await supabase
     .from('card_packs')
     .select('*', { count: 'exact', head: true })
     .eq('club_id', club.id)
     .eq('opened', false)
 
-  // Prochain match du calendrier selon date simulée
   const simDate = state.simulated_date ?? new Date().toISOString()
+
   const { data: nextCalendar } = await supabase
     .from('calendar')
     .select('*')

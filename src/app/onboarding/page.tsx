@@ -7,7 +7,6 @@ export default async function OnboardingPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth')
 
-  // Récupérer l'état onboarding
   const { data: state } = await supabase
     .from('onboarding_state')
     .select('*')
@@ -17,7 +16,7 @@ export default async function OnboardingPage() {
   if (!state) redirect('/welcome')
   if (state.draft_done) redirect('/game')
 
-  // Club du joueur (déjà créé par /api/game/new)
+  // Club le plus récent du joueur
   const { data: club } = await supabase
     .from('clubs')
     .select('id, name, budget, wage_budget')
@@ -29,48 +28,44 @@ export default async function OnboardingPage() {
 
   if (!club) redirect('/welcome')
 
-  // Si le club n'a pas encore ses joueurs, les affecter maintenant
+  // Vérifier/initialiser les joueurs du club
   const { count: playerCount } = await supabase
     .from('club_players')
     .select('*', { count: 'exact', head: true })
     .eq('club_id', club.id)
 
   if (!playerCount || playerCount === 0) {
-    // Copier les joueurs du bot correspondant
     const { data: botClub } = await supabase
-      .from('clubs')
-      .select('id')
-      .eq('name', club.name)
-      .eq('is_bot', true)
-      .single()
+      .from('clubs').select('id').eq('name', club.name).eq('is_bot', true).single()
 
     if (botClub) {
       const { data: botPlayers } = await supabase
-        .from('club_players')
-        .select('player_id')
-        .eq('club_id', botClub.id)
+        .from('club_players').select('player_id').eq('club_id', botClub.id)
 
       if (botPlayers?.length) {
-        const ids = botPlayers.map(p => p.player_id)
+        const ids = botPlayers.map((p: any) => p.player_id)
         await supabase.from('club_players').delete()
           .eq('club_id', botClub.id).in('player_id', ids)
         await supabase.from('club_players').insert(
-          ids.map(pid => ({ club_id: club.id, player_id: pid, xp: 0, level: 1 }))
+          ids.map((pid: string) => ({ club_id: club.id, player_id: pid, xp: 0, level: 1 }))
         )
       }
     }
   }
 
-  // Effectif actuel du joueur
-  const { data: myPlayers } = await supabase
+  // Effectif actuel
+  const { data: myPlayersRaw } = await supabase
     .from('club_players')
     .select('player_id, players(id, lastname, position, market_value, salary, real_team, category)')
     .eq('club_id', club.id)
 
-  // Tirer les 25 cartes selon les catégories
-  const myPlayerIds = myPlayers?.map(p => p.player_id) ?? []
+  const myPlayers = (myPlayersRaw ?? [])
+    .map((cp: any) => cp.players)
+    .filter(Boolean)
 
-  // Récupérer les joueurs disponibles par catégorie
+  const myPlayerIds = myPlayers.map((p: any) => p.id)
+
+  // Tirer 25 cartes par catégorie, SANS les joueurs du club choisi
   const DRAFT_CONFIG = [
     { category: 'bronze',  count: 10 },
     { category: 'argent',  count: 7  },
@@ -81,34 +76,30 @@ export default async function OnboardingPage() {
 
   let draftCards: any[] = []
   for (const { category, count } of DRAFT_CONFIG) {
+    // Exclure les joueurs du club choisi ET les joueurs déjà dans l'effectif
     const { data: pool } = await supabase
       .from('players')
       .select('id, lastname, position, market_value, salary, real_team, category')
       .eq('category', category)
+      .neq('real_team', club.name) // pas de joueurs du même club
       .not('id', 'in', `(${myPlayerIds.join(',')})`)
-      .limit(count * 10) // pool large pour shuffler
+      .limit(count * 15)
 
     if (pool?.length) {
-      const shuffled = pool.sort(() => Math.random() - 0.5).slice(0, count)
+      const shuffled = [...pool].sort(() => Math.random() - 0.5).slice(0, count)
       draftCards = [...draftCards, ...shuffled]
     }
   }
 
-  // Calcul masse salariale actuelle
-  const { data: salaryData } = await supabase
-    .from('club_players')
-    .select('players(salary)')
-    .eq('club_id', club.id)
-
-  const currentWage = salaryData?.reduce((sum: number, cp: any) =>
-    sum + (cp.players?.salary ?? 0), 0) ?? 0
+  // Masse salariale actuelle
+  const currentWage = myPlayers.reduce((sum: number, p: any) => sum + (p.salary ?? 0), 0)
 
   return (
     <OnboardingDraft
       userId={user.id}
       club={{ ...club, current_wage: currentWage }}
       draftCards={draftCards}
-      myPlayers={(myPlayers ?? []).map((cp: any) => cp.players).filter(Boolean)}
+      myPlayers={myPlayers}
     />
   )
 }
