@@ -45,7 +45,7 @@ async function calcPlayerClubScore(supabase: any, clubId: string, gameweek: numb
     const stat    = statsMap.get(joueurid) ?? { joueurid, gameweek, played: 0, starter: 0, rating: 0, goals: 0 }
     const isStarter = (starterIds as Set<string>).has(cp.player_id)
     const result  = computePlayerScore(
-      { ...stat, starter: isStarter ? 1 : 0 },
+      { ...stat, starter: isStarter ? 1 : 0 } as any,
       p?.position as Position ?? 'ATT',
       cp.level ?? 1,
       cp.bonus_attack ?? 0,
