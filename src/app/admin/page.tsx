@@ -157,12 +157,14 @@ function CalendarPanel() {
 }
 
 // ── Données + Import Stats ────────────────────────────────────
+// ── Données + Import BD complète ─────────────────────────────
 function DataPanel() {
-  const [loading, setLoading]     = useState<string | null>(null)
-  const [result, setResult]       = useState('')
-  const [statsFile, setStatsFile] = useState<File | null>(null)
-  const [importing, setImporting] = useState(false)
-  const [importResult, setImportResult] = useState('')
+  const [loading, setLoading]       = useState<string | null>(null)
+  const [result, setResult]         = useState('')
+  const [dbFile, setDbFile]         = useState<File | null>(null)
+  const [importing, setImporting]   = useState(false)
+  const [importLog, setImportLog]   = useState<string[]>([])
+  const [tabs, setTabs]             = useState({ players: true, calendar: true, stats: true })
   const fileRef = useRef<HTMLInputElement>(null)
 
   async function action(endpoint: string, label: string) {
@@ -172,69 +174,90 @@ function DataPanel() {
     setResult(data.message ?? data.error ?? 'OK'); setLoading(null)
   }
 
-  async function importStats() {
-    if (!statsFile) return
-    setImporting(true); setImportResult('')
+  async function importDatabase() {
+    if (!dbFile) return
+    setImporting(true); setImportLog(['📂 Lecture du fichier...'])
     try {
-      // Lire le fichier Excel/CSV
       const XLSX = await import('xlsx')
-      const buffer = await statsFile.arrayBuffer()
+      const buffer = await dbFile.arrayBuffer()
       const wb = XLSX.read(buffer)
-      const ws = wb.Sheets[wb.SheetNames[0]]
-      const rows: any[] = XLSX.utils.sheet_to_json(ws)
 
-      // Normaliser les colonnes
-      const normalized = rows.map(row => ({
-        lastname:  row['Nom'] ?? row['lastname'] ?? '',
-        club:      row['Club'] ?? row['club'] ?? '',
-        position:  row['Poste'] ?? row['position'] ?? '',
-        gameweek:  parseInt(row['Journée'] ?? row['gameweek'] ?? 0),
-        played:    parseInt(row['Joué'] ?? row['played'] ?? 0),
-        starter:   parseInt(row['Titulaire'] ?? row['starter'] ?? 0),
-        rating:    parseFloat(row['Note'] ?? row['rating'] ?? 0),
-        goals:     parseInt(row['Buts'] ?? row['goals'] ?? 0),
-      })).filter(r => r.lastname && r.gameweek > 0)
+      const players  = tabs.players  ? XLSX.utils.sheet_to_json(wb.Sheets['Joueurs']   ?? wb.Sheets[wb.SheetNames[0]]) : null
+      const calendar = tabs.calendar ? XLSX.utils.sheet_to_json(wb.Sheets['Calendrier'] ?? wb.Sheets[wb.SheetNames[1]]) : null
+      const stats    = tabs.stats    ? XLSX.utils.sheet_to_json(wb.Sheets['Stats']      ?? wb.Sheets[wb.SheetNames[3]]) : null
 
-      const res = await fetch('/api/admin/import-stats', {
+      setImportLog(l => [...l,
+        players  ? `📊 ${players.length} joueurs lus` : '',
+        calendar ? `📅 ${calendar?.length} matchs lus` : '',
+        stats    ? `📈 ${stats?.length} stats lues` : '',
+        '⬆ Envoi vers Supabase...',
+      ].filter(Boolean))
+
+      const res = await fetch('/api/admin/import-db', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows: normalized }),
+        body: JSON.stringify({ players, calendar, stats }),
       })
       const data = await res.json()
-      setImportResult(data.message ?? data.error)
+
+      const logs = Object.entries(data.results ?? {}).map(([k, v]) => `${v}`)
+      setImportLog(l => [...l, ...logs, '✅ Import terminé !'])
     } catch (e: any) {
-      setImportResult(`❌ Erreur : ${e.message}`)
+      setImportLog(l => [...l, `❌ Erreur : ${e.message}`])
     }
     setImporting(false)
   }
 
   return (
     <div className="space-y-4">
-      {/* Import stats */}
+      {/* Import base de données */}
       <div className="player-card">
         <div className="flex items-center gap-2 mb-3">
           <FileSpreadsheet size={16} className="text-grass" />
-          <p className="font-display font-bold text-white text-sm">Import Stats Joueurs</p>
+          <p className="font-display font-bold text-white">Import Base de données</p>
         </div>
         <p className="text-gray-400 text-xs font-body mb-3">
-          Importe le fichier Excel généré (Nom, Club, Poste, Journée, Joué, Titulaire, Note, Buts)
+          Fichier Excel avec onglets Joueurs, Calendrier, Stats.
+          Écrase les données existantes.
         </p>
-        <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv"
-          onChange={e => setStatsFile(e.target.files?.[0] ?? null)}
+
+        {/* Onglets à importer */}
+        <div className="flex gap-2 mb-3">
+          {([
+            ['players',  'Joueurs'],
+            ['calendar', 'Calendrier'],
+            ['stats',    'Stats'],
+          ] as [keyof typeof tabs, string][]).map(([key, label]) => (
+            <button key={key}
+              onClick={() => setTabs(t => ({ ...t, [key]: !t[key] }))}
+              className={cn('flex-1 py-1.5 rounded-xl text-xs font-display font-bold uppercase border transition-all',
+                tabs[key] ? 'bg-grass text-pitch border-grass' : 'bg-card border-card-border text-gray-500')}>
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <input ref={fileRef} type="file" accept=".xlsx,.xls"
+          onChange={e => setDbFile(e.target.files?.[0] ?? null)}
           className="hidden" />
-        <button onClick={() => fileRef.current?.click()}
-          className="btn-secondary w-full mb-2">
-          {statsFile ? `📄 ${statsFile.name}` : '📂 Choisir le fichier Excel'}
+        <button onClick={() => fileRef.current?.click()} className="btn-secondary w-full mb-2">
+          {dbFile ? `📄 ${dbFile.name}` : '📂 Choisir Base_de_données.xlsx'}
         </button>
-        {statsFile && (
-          <button onClick={importStats} disabled={importing} className="btn-primary w-full">
-            {importing ? 'Import en cours...' : '⬆ Importer les stats'}
+        {dbFile && (
+          <button onClick={importDatabase} disabled={importing} className="btn-primary w-full">
+            {importing ? 'Import en cours...' : '⬆ Importer'}
           </button>
         )}
-        {importResult && (
-          <p className={cn('text-sm font-body mt-2', importResult.startsWith('❌') ? 'text-red-400' : 'text-grass')}>
-            {importResult}
-          </p>
+        {importLog.length > 0 && (
+          <div className="mt-3 space-y-1">
+            {importLog.map((line, i) => (
+              <p key={i} className={cn('text-xs font-body',
+                line.startsWith('✅') ? 'text-grass' :
+                line.startsWith('❌') ? 'text-red-400' : 'text-gray-400')}>
+                {line}
+              </p>
+            ))}
+          </div>
         )}
       </div>
 
@@ -247,18 +270,15 @@ function DataPanel() {
       {[
         { label: 'Ajouter paquets quotidiens', endpoint: '/api/admin/daily-packs' },
         { label: 'Rafraîchir le marché',        endpoint: '/api/admin/refresh-market' },
-        { label: 'Réinitialiser le calendrier', endpoint: '/api/admin/reset-calendar', danger: true },
-      ].map(({ label, endpoint, danger }) => (
+      ].map(({ label, endpoint }) => (
         <button key={label} onClick={() => action(endpoint, label)} disabled={!!loading}
-          className={cn('w-full py-3 rounded-xl font-display font-bold text-sm uppercase tracking-wide transition-all',
-            danger ? 'bg-red-900/30 border border-red-800/40 text-red-400' : 'btn-secondary')}>
+          className="btn-secondary w-full py-3 font-display font-bold text-sm uppercase tracking-wide">
           {loading === label ? '...' : label}
         </button>
       ))}
     </div>
   )
 }
-
 export default function AdminPage() {
   const [section, setSection] = useState('simulation')
   const ActiveSection =
