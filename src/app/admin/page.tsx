@@ -1,5 +1,5 @@
 'use client'
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { runSimulation } from './actions'
@@ -334,14 +334,13 @@ function DataPanel() {
 }
 
 // ── Page principale ───────────────────────────────────────────
-export default function AdminPage() {
+function AdminContent() {
   const searchParams = useSearchParams()
   const tabParam     = searchParams.get('tab')
   const [section, setSection] = useState(
     SECTIONS.find(s => s.id === tabParam)?.id ?? 'simulation'
   )
 
-  // Sync si l'URL change
   useEffect(() => {
     const t = searchParams.get('tab')
     if (t && SECTIONS.find(s => s.id === t)) setSection(t)
@@ -379,5 +378,13 @@ export default function AdminPage() {
 
       <ActiveSection />
     </div>
+  )
+}
+
+export default function AdminPage() {
+  return (
+    <Suspense fallback={<div className="page flex items-center justify-center"><div className="w-8 h-8 border-2 border-grass border-t-transparent rounded-full animate-spin" /></div>}>
+      <AdminContent />
+    </Suspense>
   )
 }
