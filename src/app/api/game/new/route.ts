@@ -16,13 +16,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Date dans le futur' }, { status: 400 })
   }
 
-  // ── NE PAS supprimer les anciennes parties ─────────────────
-  // Désactiver les parties précédentes
+  // Désactiver toutes les saves existantes
   await supabase.from('game_saves')
     .update({ is_active: false })
     .eq('user_id', user.id)
 
-  // ── Créer le nouveau club ──────────────────────────────────
+  // Créer le nouveau club
   const { data: club, error: clubErr } = await supabase
     .from('clubs')
     .insert({
@@ -35,20 +34,20 @@ export async function POST(req: Request) {
     .select().single()
   if (clubErr) return NextResponse.json({ error: clubErr.message }, { status: 500 })
 
-  // ── Upgrades initiaux ──────────────────────────────────────
+  // Upgrades initiaux
   await supabase.from('club_upgrades').insert([
     'offense_center','defense_center','tactical_room','academy',
     'training_center','stadium','tactical_staff',
   ].map(type => ({ club_id: club.id, type, level: 0 })))
 
-  // ── Paquets de bienvenue ───────────────────────────────────
+  // Paquets de bienvenue
   await supabase.from('card_packs').insert([
     { club_id: club.id, type: 'standard', opened: false },
     { club_id: club.id, type: 'standard', opened: false },
     { club_id: club.id, type: 'standard', opened: false },
   ])
 
-  // ── Gameweek de départ selon la date ──────────────────────
+  // Gameweek de départ
   const { data: firstMatch } = await supabase
     .from('calendar')
     .select('gameweek')
@@ -58,8 +57,8 @@ export async function POST(req: Request) {
     .single()
   const startGameweek = firstMatch?.gameweek ?? 1
 
-  // ── Créer la save ──────────────────────────────────────────
-  const { data: save } = await supabase
+  // Créer la save
+  const { data: save, error: saveErr } = await supabase
     .from('game_saves')
     .insert({
       user_id: user.id,
@@ -69,8 +68,9 @@ export async function POST(req: Request) {
       gameweek: startGameweek,
     })
     .select().single()
+  if (saveErr) return NextResponse.json({ error: saveErr.message }, { status: 500 })
 
-  // ── Onboarding state ───────────────────────────────────────
+  // Onboarding state — lié à cette save spécifique
   await supabase.from('onboarding_state').upsert({
     user_id: user.id,
     club_chosen: false,
@@ -78,8 +78,8 @@ export async function POST(req: Request) {
     current_gameweek: startGameweek,
     simulated_date: start.toISOString(),
     game_started_at: new Date().toISOString(),
-    save_id: save?.id ?? null,
+    save_id: save.id,
   }, { onConflict: 'user_id' })
 
-  return NextResponse.json({ clubId: club.id, clubName, startGameweek })
+  return NextResponse.json({ clubId: club.id, clubName, startGameweek, saveId: save.id })
 }
